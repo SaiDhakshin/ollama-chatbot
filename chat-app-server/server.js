@@ -30,4 +30,13 @@ app.post('/chat', async (req, res) => {
     }
 });
 
+app.post("/ask", async (req, res) => {
+    try {
+      const response = await axios.post("http://127.0.0.1:5002/ask", req.body);
+      res.json(response.data);
+    } catch (error) {
+      res.status(500).json({ error: "Error connecting to AI service" });
+    }
+});
+
 app.listen(5001, () => console.log('Server running on port 5001'));

@@ -4,6 +4,7 @@ import { useChatStore } from '../stores/chat';
 
 const chatStore = useChatStore();
 const userMessage = ref('');
+const toggleChat = ref(false);
 
 const sendMessage = async () => {
   if (userMessage.value.trim() !== '') {
@@ -20,15 +21,18 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="chat-window">
-    <div class="chat-container">
-      <div v-for="(msg, index) in chatStore.messages" :key="index" :class="msg.role">
-        <p>{{ msg.content }}</p>
+  <div class="chat-window-container">
+    <div class="chat-icon" @click="toggleChat = !toggleChat"><img src="../assets/chat-icon.png" alt=""></div>
+    <div v-if="toggleChat" class="chat-window">
+      <div class="chat-container">
+        <div v-for="(msg, index) in chatStore.messages" :key="index" :class="msg.role">
+          <p>{{ msg.content }}</p>
+        </div>
       </div>
-    </div>
-    <div class="input-container">
-      <input v-model="userMessage" @keyup.enter="sendMessage" placeholder="Type a message..." />
-      <button @click="sendMessage">Send</button>
+      <div class="input-container">
+        <input v-model="userMessage" @keyup.enter="sendMessage" placeholder="Type a message..." />
+        <button @click="sendMessage">Send</button>
+      </div>
     </div>
   </div>
 </template>
@@ -91,5 +95,24 @@ button {
   border-radius: 5px;
   margin-left: 10px;
   cursor: pointer;
+}
+
+.chat-icon img {
+  width: 24px;
+  height: 24px;
+}
+
+.chat-icon {
+  border-radius: 15px;
+  height: 28px;
+  border: 2px solid black;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.chat-window-container {
+  display: flex;
+  flex-direction: row;
+  gap: 15px;
 }
 </style>

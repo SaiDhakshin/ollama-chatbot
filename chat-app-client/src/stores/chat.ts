@@ -10,8 +10,8 @@ export const useChatStore = defineStore('chat', {
       this.messages.push({ role: 'user', content: userMessage });
       
       try {
-        const response = await axios.post('http://localhost:5001/chat', { message: userMessage });
-        this.messages.push({ role: 'bot', content: response.data.reply });
+        const response = await axios.post('http://localhost:5002/ask', { question: userMessage });
+        this.messages.push({ role: 'bot', content: response.data.answer });
       } catch (error) {
         console.error('Error fetching chatbot response:', error);
       }
