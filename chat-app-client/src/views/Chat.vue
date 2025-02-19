@@ -8,7 +8,10 @@ const toggleChat = ref(false);
 
 const sendMessage = async () => {
   if (userMessage.value.trim() !== '') {
+    const chatContainer = document.querySelector('.chat-container');
+    chatContainer.scrollTop = chatContainer.scrollHeight;
     await chatStore.sendMessage(userMessage.value);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
     userMessage.value = '';
   }
 };
@@ -22,7 +25,6 @@ onMounted(() => {
 
 <template>
   <div class="chat-window-container">
-    <div class="chat-icon" @click="toggleChat = !toggleChat"><img src="../assets/chat-icon.png" alt=""></div>
     <div v-if="toggleChat" class="chat-window">
       <div class="chat-container">
         <div v-for="(msg, index) in chatStore.messages" :key="index" :class="msg.role">
@@ -34,6 +36,7 @@ onMounted(() => {
         <button @click="sendMessage">Send</button>
       </div>
     </div>
+    <div class="chat-icon" @click="toggleChat = !toggleChat"><img src="../assets/chat-icon.png" alt=""></div>
   </div>
 </template>
 
@@ -51,10 +54,10 @@ onMounted(() => {
 
 .chat-container {
   flex: 1;
-  overflow-y: auto;
   padding: 10px;
   display: flex;
   flex-direction: column;
+  overflow-x: scroll;
 }
 
 .user {
@@ -64,6 +67,7 @@ onMounted(() => {
   padding: 8px;
   border-radius: 10px;
   margin: 5px 0;
+  justify-self: start;
 }
 
 .bot {
@@ -72,6 +76,7 @@ onMounted(() => {
   padding: 8px;
   border-radius: 10px;
   margin: 5px 0;
+  justify-self: end;
 }
 
 .input-container {
@@ -108,11 +113,13 @@ button {
   border: 2px solid black;
   padding: 10px;
   cursor: pointer;
+  top: 90%;
 }
 
 .chat-window-container {
   display: flex;
   flex-direction: row;
   gap: 15px;
+  align-items: flex-end;
 }
 </style>

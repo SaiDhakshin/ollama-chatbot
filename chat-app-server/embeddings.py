@@ -56,7 +56,7 @@ def find_answer(query):
     query_embedding = model.encode([query])
     D, I = index.search(query_embedding, k=1)  # Find closest match
     # print(f"Distance: {D[0][0]}, Matched Index: {I[0][0]}")  # Debugging
-    if D[0][0] < 7.0:  # Lower distance = better match
+    if D[0][0] < 5.0:  # Lower distance = better match
         return faq_data[I[0][0]]["answer"]
     return "Sorry, I couldn't find an answer."
 
@@ -70,7 +70,7 @@ def ask_llama(query):
 def ask():
     data = request.json
     query = data.get("question", "")
-    answer = find_answer(query)
+    answer = ask_llama(query)
     return jsonify({"answer": answer})
 
 if __name__ == "__main__":
