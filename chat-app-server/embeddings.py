@@ -4,6 +4,7 @@ import faiss
 import numpy as np
 from flask_cors import CORS  # Import CORS
 import ollama
+from textblob import TextBlob
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -51,18 +52,65 @@ index.add(np.array(embeddings))  # Add vectors to FAISS
 print("FAQ Embeddings Shape:", embeddings.shape)
 print("Sample Embedding:", embeddings[0][:5])  # Print first 5 values
 
+def normalize_query(query):
+    synonyms = {
+        "change": "reset",
+        "money back": "refund",
+        "ship": "deliver",
+    }
+    for word, synonym in synonyms.items():
+        query = query.replace(word, synonym)
+    return query
+
+def correct_spelling(query):
+    return str(TextBlob(query).correct())
+
+def generate_llama_response(query):
+    prompt = f"Answer this customer support question: {query}"
+    response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content": prompt}])
+    return response
+
 def find_answer(query):
     print("FAISS Index Size:", index.ntotal)
-    query_embedding = model.encode([query])
+    # Handle casual greetings
+    greetings = {
+        "hi": "Hello! How can I assist you today?",
+        "hello": "Hi there! What can I help you with?",
+        "hey": "Hey! How can I assist?",
+        "good morning": "Good morning! How may I help you?",
+        "good afternoon": "Good afternoon! Need any assistance?",
+        "good evening": "Good evening! How can I assist you today?",
+    }
+
+    small_talk = {
+        "how are you": "I'm just a bot, but I'm here to help!",
+        "what's your name": "I'm your customer support assistant.",
+        "who made you": "I was created to assist customers like you!",
+        "what can you do": "I can answer FAQs, help with support queries, and provide information!",
+    }
+
+
+    lower_query = query.lower().strip()  # Normalize input
+    if lower_query in greetings:
+        return greetings[lower_query]
+    if lower_query in small_talk:
+        return small_talk[lower_query]
+    
+    # Otherwise, continue with FAISS search
+    normalized_query = normalize_query(lower_query)
+    query_embedding = model.encode([normalized_query])
     D, I = index.search(query_embedding, k=1)  # Find closest match
     # print(f"Distance: {D[0][0]}, Matched Index: {I[0][0]}")  # Debugging
-    if D[0][0] < 5.0:  # Lower distance = better match
+    if D[0][0] < 1.0:  # Lower distance = better match
         return faq_data[I[0][0]]["answer"]
-    return "Sorry, I couldn't find an answer."
+    # If no FAQ match, generate response using LLaMA
+    llama_response = generate_llama_response(query)
+    return llama_response
 
 def ask_llama(query):
-    faq_answer = find_answer(query)
-    prompt = f"User question: {query}\nFAQ Answer: {faq_answer}\nMake this response more conversational:"
+    querySpell = correct_spelling(query)  # Apply spell check before searching
+    faq_answer = find_answer(querySpell)
+    prompt = f"User question: {query}\nFAQ Answer: {faq_answer}\nMake this response more conversational as if you are replying to a customer and dont mention any technical details:"
     response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content": prompt}])
     return response["message"]["content"]
 
