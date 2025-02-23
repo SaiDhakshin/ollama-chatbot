@@ -1,10 +1,13 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useChatStore } from '../stores/chat';
+import axios from 'axios';
 
 const chatStore = useChatStore();
 const userMessage = ref('');
 const toggleChat = ref(false);
+const showCorrectionForm = ref(false);
+const correction = ref('');
 
 const sendMessage = async () => {
   if (userMessage.value.trim() !== '') {
@@ -21,6 +24,28 @@ onMounted(() => {
   const chatContainer = document.querySelector('.chat-container');
   if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
 });
+
+const sendFeedback = async (isSend) => {
+  if (!chatStore.messages.length) return;
+  const lastBotMessage = chatStore.messages.find(msg => msg.role === 'bot');
+  if (!lastBotMessage) return; // Ensure there's a bot response to give feedback on
+  let payload = {
+    question: chatStore.messages[chatStore.messages.length - 2]?.content || '', // User's last question
+    bot_answer: lastBotMessage.content, // Bot's response
+    correct_answer: isSend ? null : correction.value, // If not helpful, send user's correction
+  };
+  try {
+    await axios.post("http://127.0.0.1:5002/feedback", payload);
+    alert("Feedback sent successfully! Thank you.");
+
+    // Reset correction form after submitting
+    showCorrectionForm.value = false;
+    correction.value = '';
+  } catch (error) {
+    console.error("Error sending feedback:", error);
+    alert("Failed to send feedback. Please try again.");
+  }
+}
 </script>
 
 <template>
@@ -31,9 +56,19 @@ onMounted(() => {
           <p>{{ msg.content }}</p>
         </div>
       </div>
+      <div v-if="chatStore.messages?.[chatStore.messages?.length - 1]?.role == 'bot'" class="feedback-buttons">
+        <button @click="sendFeedback(true)">👍 Helpful</button>
+        <button @click="showCorrectionForm = true">👎 Not Helpful</button>
+      </div>
       <div class="input-container">
-        <input v-model="userMessage" @keyup.enter="sendMessage" placeholder="Type a message..." />
-        <button @click="sendMessage">Send</button>
+        <template v-if="showCorrectionForm">
+          <input v-model="correction" placeholder="What should the answer be?" />
+          <button @click="sendFeedback(false)">Submit</button>
+        </template>
+        <template v-else >          
+          <input v-model="userMessage" @keyup.enter="sendMessage" placeholder="Type a message..." />
+          <button @click="sendMessage">Send</button>
+        </template>
       </div>
     </div>
     <div class="chat-icon" @click="toggleChat = !toggleChat"><img src="../assets/chat-icon.png" alt=""></div>
@@ -121,5 +156,9 @@ button {
   flex-direction: row;
   gap: 15px;
   align-items: flex-end;
+}
+
+.feedback-buttons {
+  padding: 5px;
 }
 </style>

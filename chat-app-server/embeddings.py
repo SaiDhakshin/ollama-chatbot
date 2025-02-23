@@ -5,6 +5,9 @@ import numpy as np
 from flask_cors import CORS  # Import CORS
 import ollama
 from textblob import TextBlob
+import threading
+import time
+import json
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -12,45 +15,20 @@ CORS(app)  # Enable CORS for all routes
 # Load embedding model
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# Sample FAQ Data
-faq_data = [
-  {
-    "question": "How do I reset my password?",
-    "answer": "To reset your password, go to the login page, click 'Forgot Password', and follow the instructions to receive a reset link in your email."
-  },
-  {
-    "question": "What is your refund policy?",
-    "answer": "We offer a full refund within 30 days of purchase if the product is unused and in its original packaging. Please contact support for assistance."
-  },
-  {
-    "question": "How can I contact customer support?",
-    "answer": "You can contact our customer support team via email at support@example.com or call us at +1-800-123-4567."
-  },
-  {
-    "question": "Do you offer international shipping?",
-    "answer": "Yes, we offer international shipping. Shipping fees and delivery times vary based on your location."
-  },
-  {
-    "question": "How do I track my order?",
-    "answer": "Once your order is shipped, you will receive an email with a tracking link. You can also track your order from the 'My Orders' section on our website."
-  },
-  {"question": "Can I get a refund?", "answer": "We offer a full refund within 30 days..."},
-  {"question": "How do I get my money back?", "answer": "We offer a full refund within 30 days..."},
-  {"question": "What is the refund policy?", "answer": "We offer a full refund within 30 days..."}
-]
+# Load FAQ data from JSON file
+with open("faqs.json", "r") as file:
+    faq_data = json.load(file)
+
 
 # Extract questions and generate embeddings
 questions = [faq["question"] for faq in faq_data]
 embeddings = model.encode(questions)
-print(embeddings)
+
 
 # Convert to FAISS index
 dimension = embeddings.shape[1]
 index = faiss.IndexFlatL2(dimension)
 index.add(np.array(embeddings))  # Add vectors to FAISS
-
-print("FAQ Embeddings Shape:", embeddings.shape)
-print("Sample Embedding:", embeddings[0][:5])  # Print first 5 values
 
 def normalize_query(query):
     synonyms = {
@@ -71,7 +49,6 @@ def generate_llama_response(query):
     return response
 
 def find_answer(query):
-    print("FAISS Index Size:", index.ntotal)
     # Handle casual greetings
     greetings = {
         "hi": "Hello! How can I assist you today?",
@@ -114,6 +91,51 @@ def ask_llama(query):
     response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content": prompt}])
     return response["message"]["content"]
 
+def process_feedback():
+    """Periodically check feedback and process it."""
+    while True:
+        try:
+            feedback_list = []
+            with open("feedback_data.txt", "r") as f:
+                lines = f.readlines()
+
+            if lines:
+                with open("feedback_data.txt", "w") as f:  
+                    f.write("")  # Clear file after reading
+            
+                for line in lines:
+                    try:
+                        feedback_entry = json.loads(line.strip())  # ✅ Proper JSON parsing
+                        feedback_entry["bot_answer"] = feedback_entry["bot_answer"].replace("\\n", "\n")  # ✅ Decode newlines back
+                    except json.JSONDecodeError as e:
+                        print(f"❌ Error parsing JSON: {e} (Line: {line.strip()})")
+                        continue  # Skip this entry
+                    question = feedback_entry["question"]
+                    correct_answer = feedback_entry["correct_answer"]
+
+                    if not question or not correct_answer:
+                        print(f"⚠️ Skipping entry due to missing data: {feedback_entry}")
+                        continue  # Skip incomplete entries
+                    for faq in faq_data:
+                            if faq["question"].lower() == question.lower():
+                                faq["answer"] = correct_answer
+                                print(f"Updated FAQ: {question} -> {correct_answer}")
+                                break
+                    else:  
+                        # ✅ If no match is found, insert a new question
+                        new_faq = {"question": question, "answer": correct_answer}
+                        faq_data.append(new_faq)
+                        print(f"➕ Added New FAQ: {question} -> {correct_answer}")
+                # Clear feedback file after processing
+                open("feedback_data.txt", "w").close()  # ✅ Clear feedback file
+                # Save the updated FAQ data back to faqs.txt
+                with open("faqs.json", "w") as f:
+                    json.dump(faq_data, f, indent=4)  # ✅ Save with formatting
+        except Exception as e:
+            print("Error processing feedback:", e)
+
+        time.sleep(60)  # Run every 60 seconds
+
 @app.route("/ask", methods=["POST"])
 def ask():
     data = request.json
@@ -121,7 +143,30 @@ def ask():
     answer = ask_llama(query)
     return jsonify({"answer": answer})
 
+@app.route("/feedback", methods=["POST"])
+def feedback():
+    data = request.json
+    question = data.get("question", "")
+    bot_answer = data.get("bot_answer", "")
+    correct_answer = data.get("correct_answer", "")
+
+    feedback_entry = {
+        "question": question,
+        "bot_answer": bot_answer,
+        "correct_answer": correct_answer if correct_answer else "Not Provided",
+    }
+    print(feedback_entry)
+    with open("feedback_data.txt", "a") as f:
+        f.write(json.dumps(feedback_entry) + "\n")  # ✅ Proper JSON format
+
+    return jsonify({"message": "Feedback received! Thank you."})
+
+
 if __name__ == "__main__":
+    # Start feedback processing in a separate thread
+    # process_feedback()
+    feedback_thread = threading.Thread(target=process_feedback, daemon=True)
+    feedback_thread.start()
     app.run(port=5002)
 
 # Example Query
